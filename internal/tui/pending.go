@@ -48,6 +48,7 @@ func (t *PendingTracker) AddWithDirection(lightID, field string, target interfac
 	defer t.mu.Unlock()
 
 	key := lightID + ":" + field
+	debugf("PendingTracker: Adding pending op %s = %T(%v) dir=%v", key, target, target, dir)
 	t.ops[key] = &PendingOp{
 		Field:     field,
 		Target:    target,
@@ -66,8 +67,10 @@ func (t *PendingTracker) ShouldIgnore(lightID, field string, value interface{}) 
 	key := lightID + ":" + field
 	op, exists := t.ops[key]
 	if !exists {
+		debugf("PendingTracker: no pending op for %s", key)
 		return false
 	}
+	debugf("PendingTracker: found pending op for %s, target=%v, incoming=%v", key, op.Target, value)
 
 	// Check if expired
 	if time.Now().After(op.ExpiresAt) {
@@ -79,9 +82,11 @@ func (t *PendingTracker) ShouldIgnore(lightID, field string, value interface{}) 
 	case DirExact:
 		// For exact matches (booleans), only ignore if value matches target
 		if valuesEqual(op.Target, value) {
+			debugf("PendingTracker: DirExact match for %s, ignoring", key)
 			delete(t.ops, key)
 			return true
 		}
+		debugf("PendingTracker: DirExact NO match for %s", key)
 		return false
 
 	case DirUp:
@@ -121,6 +126,26 @@ func (t *PendingTracker) ShouldIgnore(lightID, field string, value interface{}) 
 // MatchesAndClear is the old API for backward compatibility - uses ShouldIgnore
 func (t *PendingTracker) MatchesAndClear(lightID, field string, value interface{}) bool {
 	return t.ShouldIgnore(lightID, field, value)
+}
+
+// HasPending checks if there's a pending operation for the given light and field
+func (t *PendingTracker) HasPending(lightID, field string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	key := lightID + ":" + field
+	op, exists := t.ops[key]
+	if !exists {
+		return false
+	}
+
+	// Check if expired
+	if time.Now().After(op.ExpiresAt) {
+		delete(t.ops, key)
+		return false
+	}
+
+	return true
 }
 
 // Cleanup removes expired pending operations
@@ -171,6 +196,7 @@ func toFloat64(v interface{}) float64 {
 
 // valuesEqual compares two values for equality (exact match)
 func valuesEqual(a, b interface{}) bool {
+	debugf("valuesEqual: a=%T(%v), b=%T(%v)", a, a, b, b)
 	switch av := a.(type) {
 	case bool:
 		if bv, ok := b.(bool); ok {
@@ -182,8 +208,24 @@ func valuesEqual(a, b interface{}) bool {
 		return toFloat64(a) == toFloat64(b)
 	case struct{ X, Y float64 }:
 		if bv, ok := b.(struct{ X, Y float64 }); ok {
-			return av.X == bv.X && av.Y == bv.Y
+			// Use epsilon comparison for XY color values
+			// The bridge may return slightly different values due to:
+			// - Floating point precision in our HS->XY conversion
+			// - Color gamut clamping on the bridge
+			// - Rounding during API transmission (%.4f format)
+			const epsilon = 0.02
+			match := absFloat(av.X-bv.X) < epsilon && absFloat(av.Y-bv.Y) < epsilon
+			debugf("valuesEqual XY: target=(%f,%f), incoming=(%f,%f), match=%v", av.X, av.Y, bv.X, bv.Y, match)
+			return match
 		}
+		debugf("valuesEqual: XY type assertion failed, b is %T", b)
 	}
 	return false
+}
+
+func absFloat(x float64) float64 {
+	if x < 0 {
+		return -x
+	}
+	return x
 }

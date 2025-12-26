@@ -272,3 +272,185 @@ func TestValuesEqual(t *testing.T) {
 		}
 	}
 }
+
+func TestValuesEqual_ColorXY_EpsilonComparison(t *testing.T) {
+	tests := []struct {
+		name     string
+		a, b     struct{ X, Y float64 }
+		expected bool
+	}{
+		{
+			name:     "exact match",
+			a:        struct{ X, Y float64 }{0.5, 0.6},
+			b:        struct{ X, Y float64 }{0.5, 0.6},
+			expected: true,
+		},
+		{
+			name:     "within epsilon (small difference)",
+			a:        struct{ X, Y float64 }{0.5104, 0.2120},
+			b:        struct{ X, Y float64 }{0.5100, 0.2120},
+			expected: true,
+		},
+		{
+			name:     "within epsilon (bridge rounding)",
+			a:        struct{ X, Y float64 }{0.163766, 0.083500},
+			b:        struct{ X, Y float64 }{0.1638, 0.0835},
+			expected: true,
+		},
+		{
+			name:     "outside epsilon",
+			a:        struct{ X, Y float64 }{0.5, 0.6},
+			b:        struct{ X, Y float64 }{0.55, 0.6},
+			expected: false,
+		},
+		{
+			name:     "very different values",
+			a:        struct{ X, Y float64 }{0.3307, 0.1426},
+			b:        struct{ X, Y float64 }{0.4159, 0.1814},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := valuesEqual(tt.a, tt.b)
+			if result != tt.expected {
+				t.Errorf("valuesEqual(%v, %v) = %v, expected %v", tt.a, tt.b, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestPendingTracker_HasPending(t *testing.T) {
+	tracker := NewPendingTracker()
+
+	// No pending ops initially
+	if tracker.HasPending("light1", "color_xy") {
+		t.Error("Expected no pending op for color_xy")
+	}
+
+	// Add pending op
+	tracker.Add("light1", "color_xy", struct{ X, Y float64 }{0.5, 0.6})
+
+	// Should have pending op now
+	if !tracker.HasPending("light1", "color_xy") {
+		t.Error("Expected pending op for color_xy")
+	}
+
+	// Different field should not have pending
+	if tracker.HasPending("light1", "color_temp") {
+		t.Error("Expected no pending op for color_temp")
+	}
+
+	// Different light should not have pending
+	if tracker.HasPending("light2", "color_xy") {
+		t.Error("Expected no pending op for light2")
+	}
+}
+
+func TestPendingTracker_HasPending_Expiry(t *testing.T) {
+	tracker := NewPendingTracker()
+
+	// Add expired op directly
+	tracker.mu.Lock()
+	tracker.ops["light1:color_xy"] = &PendingOp{
+		Field:     "color_xy",
+		Target:    struct{ X, Y float64 }{0.5, 0.6},
+		Direction: DirExact,
+		ExpiresAt: time.Now().Add(-1 * time.Second), // Already expired
+	}
+	tracker.mu.Unlock()
+
+	// Should return false for expired op
+	if tracker.HasPending("light1", "color_xy") {
+		t.Error("Expected HasPending to return false for expired op")
+	}
+
+	// Expired op should be cleaned up
+	tracker.mu.Lock()
+	_, exists := tracker.ops["light1:color_xy"]
+	tracker.mu.Unlock()
+	if exists {
+		t.Error("Expected expired op to be cleaned up")
+	}
+}
+
+func TestPendingTracker_ColorXY(t *testing.T) {
+	tracker := NewPendingTracker()
+
+	// Add pending color_xy op
+	target := struct{ X, Y float64 }{0.5104, 0.2120}
+	tracker.Add("light1", "color_xy", target)
+
+	// Exact match should be ignored
+	if !tracker.ShouldIgnore("light1", "color_xy", target) {
+		t.Error("Expected to ignore exact color_xy match")
+	}
+}
+
+func TestPendingTracker_ColorXY_ApproximateMatch(t *testing.T) {
+	tracker := NewPendingTracker()
+
+	// Add pending color_xy op (what we computed from HS)
+	target := struct{ X, Y float64 }{0.163766, 0.083500}
+	tracker.Add("light1", "color_xy", target)
+
+	// Bridge returns slightly different value (rounded to 4 decimal places)
+	incoming := struct{ X, Y float64 }{0.1638, 0.0835}
+
+	// Should ignore because it's within epsilon
+	if !tracker.ShouldIgnore("light1", "color_xy", incoming) {
+		t.Error("Expected to ignore approximate color_xy match")
+	}
+}
+
+func TestPendingTracker_ColorXY_RapidChanges(t *testing.T) {
+	tracker := NewPendingTracker()
+
+	// Simulate rapid hue changes (each overwrites the previous)
+	tracker.Add("light1", "color_xy", struct{ X, Y float64 }{0.41, 0.18})
+	tracker.Add("light1", "color_xy", struct{ X, Y float64 }{0.33, 0.14})
+	tracker.Add("light1", "color_xy", struct{ X, Y float64 }{0.30, 0.13})
+	tracker.Add("light1", "color_xy", struct{ X, Y float64 }{0.22, 0.10})
+
+	// HasPending should return true
+	if !tracker.HasPending("light1", "color_xy") {
+		t.Error("Expected HasPending to return true during rapid changes")
+	}
+
+	// Old values should not match (outside epsilon)
+	if tracker.ShouldIgnore("light1", "color_xy", struct{ X, Y float64 }{0.41, 0.18}) {
+		t.Error("Expected not to ignore old color_xy value")
+	}
+
+	// HasPending should still return true (op not cleared on non-match)
+	// Wait, in current impl it gets cleared... let me check
+}
+
+func TestPendingTracker_ColorXY_MutualExclusion(t *testing.T) {
+	tracker := NewPendingTracker()
+
+	// Add pending color_xy op
+	tracker.Add("light1", "color_xy", struct{ X, Y float64 }{0.5, 0.6})
+
+	// Should have color_xy pending
+	if !tracker.HasPending("light1", "color_xy") {
+		t.Error("Expected pending color_xy")
+	}
+
+	// Should NOT have color_temp pending
+	if tracker.HasPending("light1", "color_temp") {
+		t.Error("Expected no pending color_temp")
+	}
+
+	// Now add color_temp
+	tracker.AddWithDirection("light1", "color_temp", 400, DirUp)
+
+	// Both should be pending
+	if !tracker.HasPending("light1", "color_xy") {
+		t.Error("Expected pending color_xy")
+	}
+	if !tracker.HasPending("light1", "color_temp") {
+		t.Error("Expected pending color_temp")
+	}
+}

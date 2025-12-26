@@ -274,8 +274,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// Check pending ops BEFORE processing (MatchesAndClear removes them)
+		hasPendingColorXY := m.pending.HasPending(msg.LightID, "color_xy")
+		hasPendingColorTemp := m.pending.HasPending(msg.LightID, "color_temp")
+
 		if msg.ColorTemp != nil {
-			if !m.pending.MatchesAndClear(msg.LightID, "color_temp", *msg.ColorTemp) {
+			// Ignore invalid colorTemp (0 or outside valid mirek range 153-500)
+			// The bridge sends colorTemp=0 when switching to XY color mode
+			if *msg.ColorTemp < 153 || *msg.ColorTemp > 500 {
+				debugf("  Ignoring invalid colorTemp=%v (outside range 153-500)", *msg.ColorTemp)
+			} else if hasPendingColorXY {
+				// Ignore colorTemp if we have a pending color_xy change
+				// (they're mutually exclusive modes)
+				debugf("  Ignoring colorTemp=%v (pending color_xy op exists)", *msg.ColorTemp)
+			} else if !m.pending.MatchesAndClear(msg.LightID, "color_temp", *msg.ColorTemp) {
 				debugf("  Applying colorTemp=%v (no pending match)", *msg.ColorTemp)
 				if light.Color == nil {
 					light.Color = &models.Color{}
@@ -291,7 +303,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if msg.ColorXY != nil {
 			xy := struct{ X, Y float64 }{msg.ColorXY.X, msg.ColorXY.Y}
-			if !m.pending.MatchesAndClear(msg.LightID, "color_xy", xy) {
+			// Check if we have ANY pending color_xy op (ignore echoes during rapid changes)
+			if hasPendingColorXY {
+				if m.pending.MatchesAndClear(msg.LightID, "color_xy", xy) {
+					debugf("  Ignoring colorXY (matched pending op)")
+				} else {
+					debugf("  Ignoring colorXY={%v,%v} (pending color_xy op exists, waiting for final value)", msg.ColorXY.X, msg.ColorXY.Y)
+				}
+			} else if hasPendingColorTemp {
+				// Ignore colorXY if we have a pending color_temp change
+				// (they're mutually exclusive modes - bridge sends both)
+				debugf("  Ignoring colorXY={%v,%v} (pending color_temp op exists)", msg.ColorXY.X, msg.ColorXY.Y)
+			} else {
 				debugf("  Applying colorXY={%v,%v} (no pending match)", msg.ColorXY.X, msg.ColorXY.Y)
 				if light.Color == nil {
 					light.Color = &models.Color{}
@@ -301,8 +324,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				light.Color.Mode = models.ColorModeXY
 				light.Color.InvalidateCache()
 				updated = true
-			} else {
-				debugf("  Ignoring colorXY (matched pending op)")
 			}
 		}
 

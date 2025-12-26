@@ -386,33 +386,32 @@ func (b *HueBridge) SetLightColorXY(ctx context.Context, lightID string, x, y fl
 	return b.setLightState(ctx, lightID, body)
 }
 
-// SetLightColorHS sets a light's color using Hue and Saturation
-// Hue: 0-65535 (maps to 0-360°), Saturation: 0-254 (maps to 0-100%)
-func (b *HueBridge) SetLightColorHS(ctx context.Context, lightID string, hue uint16, sat uint8) error {
-	// Convert to XY for the Hue API (V2 API uses XY)
-	// First convert HS to RGB, then RGB to XY
+// HSToXY converts Hue/Saturation values to XY color space coordinates.
+// hue is in range 0-65535, sat is in range 0-254.
+// Returns x, y coordinates in CIE 1931 color space.
+func HSToXY(hue uint16, sat uint8) (x, y float64) {
 	h := float64(hue) / 65535.0 * 360.0
 	s := float64(sat) / 254.0
 
 	// HSV to RGB (with V=1 for max brightness)
 	c := s
-	x := c * (1 - abs64(mod64(h/60.0, 2)-1))
+	xx := c * (1 - abs64(mod64(h/60.0, 2)-1))
 	m := 1.0 - c
 
 	var r, g, bl float64
 	switch int(h/60.0) % 6 {
 	case 0:
-		r, g, bl = c, x, 0
+		r, g, bl = c, xx, 0
 	case 1:
-		r, g, bl = x, c, 0
+		r, g, bl = xx, c, 0
 	case 2:
-		r, g, bl = 0, c, x
+		r, g, bl = 0, c, xx
 	case 3:
-		r, g, bl = 0, x, c
+		r, g, bl = 0, xx, c
 	case 4:
-		r, g, bl = x, 0, c
+		r, g, bl = xx, 0, c
 	case 5:
-		r, g, bl = c, 0, x
+		r, g, bl = c, 0, xx
 	}
 	r, g, bl = r+m, g+m, bl+m
 
@@ -431,8 +430,12 @@ func (b *HueBridge) SetLightColorHS(ctx context.Context, lightID string, hue uin
 	if sum == 0 {
 		sum = 1
 	}
-	xyX := X / sum
-	xyY := Y / sum
+	return X / sum, Y / sum
+}
+
+func (b *HueBridge) SetLightColorHS(ctx context.Context, lightID string, hue uint16, sat uint8) error {
+	// Convert to XY for the Hue API (V2 API uses XY)
+	xyX, xyY := HSToXY(hue, sat)
 
 	body := fmt.Sprintf(`{"color":{"xy":{"x":%.4f,"y":%.4f}}}`, xyX, xyY)
 	return b.setLightState(ctx, lightID, body)

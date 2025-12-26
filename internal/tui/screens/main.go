@@ -509,6 +509,10 @@ func (m MainModel) Update(msg tea.Msg, bridge *api.HueBridge, addPending Pending
 				light.Color.Hue = uint16(newHue)
 				light.Color.Mode = models.ColorModeHS
 				light.Color.InvalidateCache()
+				if addPending != nil {
+					x, y := api.HSToXY(light.Color.Hue, light.Color.Saturation)
+					addPending(light.ID, "color_xy", struct{ X, Y float64 }{x, y}, DirExact)
+				}
 				cmds = append(cmds, m.setColorHSCmd(bridge, light.ID, light.Color.Hue, light.Color.Saturation))
 			}
 
@@ -527,6 +531,10 @@ func (m MainModel) Update(msg tea.Msg, bridge *api.HueBridge, addPending Pending
 				light.Color.Hue = uint16(newHue)
 				light.Color.Mode = models.ColorModeHS
 				light.Color.InvalidateCache()
+				if addPending != nil {
+					x, y := api.HSToXY(light.Color.Hue, light.Color.Saturation)
+					addPending(light.ID, "color_xy", struct{ X, Y float64 }{x, y}, DirExact)
+				}
 				cmds = append(cmds, m.setColorHSCmd(bridge, light.ID, light.Color.Hue, light.Color.Saturation))
 			}
 
@@ -545,6 +553,10 @@ func (m MainModel) Update(msg tea.Msg, bridge *api.HueBridge, addPending Pending
 				light.Color.Saturation = uint8(newSat)
 				light.Color.Mode = models.ColorModeHS
 				light.Color.InvalidateCache()
+				if addPending != nil {
+					x, y := api.HSToXY(light.Color.Hue, light.Color.Saturation)
+					addPending(light.ID, "color_xy", struct{ X, Y float64 }{x, y}, DirExact)
+				}
 				cmds = append(cmds, m.setColorHSCmd(bridge, light.ID, light.Color.Hue, light.Color.Saturation))
 			}
 
@@ -563,6 +575,10 @@ func (m MainModel) Update(msg tea.Msg, bridge *api.HueBridge, addPending Pending
 				light.Color.Saturation = uint8(newSat)
 				light.Color.Mode = models.ColorModeHS
 				light.Color.InvalidateCache()
+				if addPending != nil {
+					x, y := api.HSToXY(light.Color.Hue, light.Color.Saturation)
+					addPending(light.ID, "color_xy", struct{ X, Y float64 }{x, y}, DirExact)
+				}
 				cmds = append(cmds, m.setColorHSCmd(bridge, light.ID, light.Color.Hue, light.Color.Saturation))
 			}
 
