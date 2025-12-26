@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/angristan/hue-tui/compare/v1.0.2...v1.1.0) (2025-12-26)
+
+
+### Features
+
+* **scenes:** filter scenes modal to current room ([a4a7f5b](https://github.com/angristan/hue-tui/commit/a4a7f5ba1c7afa500c201d10d25e9d120692f793))
+
 ## [1.0.2](https://github.com/angristan/hue-tui/compare/v1.0.1...v1.0.2) (2025-12-26)
 
 
