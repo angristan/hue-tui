@@ -1,0 +1,27 @@
+# Binaries
+hue
+*.exe
+build/
+dist/
+
+# Test coverage
+coverage.out
+coverage.html
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dependencies (if vendored)
+vendor/
+
+# Node (for commitlint)
+node_modules/
+package-lock.json
+package.json
