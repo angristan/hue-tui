@@ -1,5 +1,5 @@
 # Binaries
-hue
+/hue
 *.exe
 build/
 dist/
