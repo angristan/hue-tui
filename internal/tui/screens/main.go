@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -193,6 +194,10 @@ func (m *MainModel) ensureVisible() {
 }
 
 func (m *MainModel) SetData(rooms []*models.Room, scenes []*models.Scene) {
+	// Sort rooms alphabetically by name
+	sort.Slice(rooms, func(i, j int) bool {
+		return rooms[i].Name < rooms[j].Name
+	})
 	m.rooms = rooms
 	m.scenes = scenes
 	m.loading = false
@@ -221,6 +226,10 @@ func (m *MainModel) rebuildLightList() {
 		}
 
 		if hasMatchingLights {
+			// Sort lights alphabetically by name
+			sort.Slice(roomLights, func(i, j int) bool {
+				return roomLights[i].Name < roomLights[j].Name
+			})
 			// Add room header
 			m.items = append(m.items, listItem{isRoom: true, room: room})
 			// Add lights
