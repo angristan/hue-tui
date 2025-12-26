@@ -23,7 +23,9 @@ type ErrorMsg struct {
 }
 
 // ShowScenesMsg requests showing the scenes modal
-type ShowScenesMsg struct{}
+type ShowScenesMsg struct {
+	RoomID string // Filter scenes to this room (empty = show all)
+}
 
 // HideScenesMsg requests hiding the scenes modal
 type HideScenesMsg struct{}

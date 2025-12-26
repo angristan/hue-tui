@@ -520,7 +520,11 @@ func (m MainModel) Update(msg tea.Msg, bridge *api.HueBridge) (MainModel, tea.Cm
 			}
 
 		case "s":
-			return m, func() tea.Msg { return messages.ShowScenesMsg{} }
+			roomID := ""
+			if room := m.SelectedRoom(); room != nil {
+				roomID = room.ID
+			}
+			return m, func() tea.Msg { return messages.ShowScenesMsg{RoomID: roomID} }
 
 		case "/":
 			m.searchMode = true

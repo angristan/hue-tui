@@ -157,6 +157,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case messages.ShowScenesMsg:
 		m.screen = ScreenScenes
+		m.scenesScreen.SetRoomFilter(msg.RoomID)
 		return m, nil
 
 	case messages.HideScenesMsg:

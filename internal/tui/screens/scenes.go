@@ -23,6 +23,10 @@ type ScenesModel struct {
 	// Flat list for navigation
 	flatList []sceneItem
 
+	// Filter to a specific room (empty = show all)
+	filterRoomID   string
+	filterRoomName string
+
 	// Window size
 	width  int
 	height int
@@ -50,25 +54,49 @@ func (m *ScenesModel) SetScenes(scenes []*models.Scene, rooms []*models.Room) {
 	m.scenes = scenes
 	m.rooms = rooms
 	m.groupedScenes = models.ScenesByRoom(scenes)
+	m.rebuildFlatList()
+}
 
+// SetRoomFilter sets the room filter and rebuilds the list
+func (m *ScenesModel) SetRoomFilter(roomID string) {
+	m.filterRoomID = roomID
+	m.filterRoomName = ""
+
+	// Find room name for the filter
+	if roomID != "" {
+		for _, room := range m.rooms {
+			if room.ID == roomID {
+				m.filterRoomName = room.Name
+				break
+			}
+		}
+	}
+
+	m.rebuildFlatList()
+}
+
+// rebuildFlatList rebuilds the flat list based on current filter
+func (m *ScenesModel) rebuildFlatList() {
 	// Build room order and flat list
 	m.roomOrder = nil
 	m.flatList = nil
 
-	roomNames := make(map[string]string)
-	for _, room := range rooms {
-		roomNames[room.ID] = room.Name
-	}
+	for _, room := range m.rooms {
+		// Skip if filtering to a specific room and this isn't it
+		if m.filterRoomID != "" && room.ID != m.filterRoomID {
+			continue
+		}
 
-	for _, room := range rooms {
 		if scenes, ok := m.groupedScenes[room.ID]; ok && len(scenes) > 0 {
 			m.roomOrder = append(m.roomOrder, room.ID)
 
-			// Add room header
-			m.flatList = append(m.flatList, sceneItem{
-				isHeader: true,
-				roomName: room.Name,
-			})
+			// Only add room header if showing all rooms (no filter)
+			if m.filterRoomID == "" {
+				m.flatList = append(m.flatList, sceneItem{
+					isHeader: true,
+					roomName: room.Name,
+				})
+			}
 
 			// Add scenes
 			for _, scene := range scenes {
@@ -142,8 +170,12 @@ func (m *ScenesModel) movePrev() {
 func (m ScenesModel) View() string {
 	var b strings.Builder
 
-	// Modal title
-	b.WriteString(styles.StyleModalTitle.Render("Scenes"))
+	// Modal title - show room name if filtering
+	title := "Scenes"
+	if m.filterRoomName != "" {
+		title = m.filterRoomName + " Scenes"
+	}
+	b.WriteString(styles.StyleModalTitle.Render(title))
 	b.WriteString("\n\n")
 
 	// Scene list
