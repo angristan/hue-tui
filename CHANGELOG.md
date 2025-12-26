@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/angristan/hue-tui/compare/v1.0.1...v1.0.2) (2025-12-26)
+
+
+### Bug Fixes
+
+* add missing cmd/hue/main.go entrypoint ([961a787](https://github.com/angristan/hue-tui/commit/961a787a6b5c4c5ffab196da5b4002d3d623bec6))
+
 ## [1.0.1](https://github.com/angristan/hue-tui/compare/v1.0.0...v1.0.1) (2025-12-26)
 
 
