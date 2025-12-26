@@ -154,7 +154,7 @@ func (s *EventSubscription) run(ctx context.Context) {
 		// Connection lost, close and reconnect
 		s.mu.Lock()
 		if s.resp != nil {
-			s.resp.Body.Close()
+			_ = s.resp.Body.Close()
 			s.resp = nil
 		}
 		s.mu.Unlock()
@@ -190,7 +190,7 @@ func (s *EventSubscription) connect(ctx context.Context) error {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		eventsDebugf("SSE bad status: %s", resp.Status)
 		return fmt.Errorf("unexpected status: %s", resp.Status)
 	}
