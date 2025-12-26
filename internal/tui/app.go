@@ -2,6 +2,8 @@ package tui
 
 import (
 	"context"
+	"log"
+	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/angristan/hue-tui/internal/api"
@@ -10,6 +12,27 @@ import (
 	"github.com/angristan/hue-tui/internal/tui/messages"
 	"github.com/angristan/hue-tui/internal/tui/screens"
 )
+
+var debugMode = os.Getenv("HUE_DEBUG") != ""
+var debugLog *log.Logger
+
+func init() {
+	if debugMode {
+		f, err := os.OpenFile("hue-debug.log", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		if err != nil {
+			debugLog = log.New(os.Stderr, "[HUE] ", log.LstdFlags|log.Lmicroseconds)
+		} else {
+			debugLog = log.New(f, "[HUE] ", log.LstdFlags|log.Lmicroseconds)
+		}
+		debugLog.Println("Debug mode enabled")
+	}
+}
+
+func debugf(format string, args ...interface{}) {
+	if debugMode && debugLog != nil {
+		debugLog.Printf(format, args...)
+	}
+}
 
 // Screen represents the current screen state
 type Screen int
@@ -28,6 +51,10 @@ type Model struct {
 	// Bridge connection
 	bridge *api.HueBridge
 	events *api.EventSubscription
+
+	// Event handling
+	eventChan chan tea.Msg
+	pending   *PendingTracker
 
 	// Data
 	rooms  []*models.Room
@@ -58,9 +85,11 @@ func NewModel(cfg *config.Config) Model {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	m := Model{
-		config: cfg,
-		ctx:    ctx,
-		cancel: cancel,
+		config:    cfg,
+		ctx:       ctx,
+		cancel:    cancel,
+		eventChan: make(chan tea.Msg, 100),
+		pending:   NewPendingTracker(),
 	}
 
 	// Determine initial screen
@@ -144,12 +173,48 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Start event subscription
 		if m.events == nil && m.bridge != nil {
+			debugf("Starting event subscription")
 			m.events = api.NewEventSubscription(m.bridge, func(events []api.Event) {
-				// Handle events - will be converted to tea.Msg in production
+				debugf("Received %d events from WebSocket", len(events))
+				for _, event := range events {
+					debugf("  Event: type=%s resource=%s id=%s", event.Type, event.Resource, event.ResourceID)
+					if event.Resource == "light" && event.Type == api.EventTypeUpdate {
+						if update, err := api.ParseLightUpdate(event); err == nil {
+							msg := messages.LightUpdateMsg{
+								LightID: update.ID,
+								On:      update.On,
+							}
+							if update.Brightness != nil {
+								b := int(*update.Brightness)
+								msg.Brightness = &b
+							}
+							if update.ColorTemp != nil {
+								msg.ColorTemp = update.ColorTemp
+							}
+							if update.ColorXY != nil {
+								msg.ColorXY = &struct{ X, Y float64 }{update.ColorXY.X, update.ColorXY.Y}
+							}
+							debugf("  Parsed light update: id=%s on=%v brightness=%v", update.ID, update.On, update.Brightness)
+							// Non-blocking send to avoid deadlock
+							select {
+							case m.eventChan <- msg:
+								debugf("  Sent to event channel")
+							default:
+								debugf("  Channel full, dropped event")
+							}
+						} else {
+							debugf("  Failed to parse light update: %v", err)
+						}
+					}
+				}
 			})
 			if err := m.events.Start(m.ctx); err != nil {
+				debugf("Failed to start event subscription: %v", err)
 				m.err = err
+			} else {
+				debugf("Event subscription started successfully")
 			}
+			cmds = append(cmds, m.listenForEvents())
 		}
 
 	case messages.ErrorMsg:
@@ -173,6 +238,89 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case messages.RefreshMsg:
 		m.mainScreen.SetLoading(true)
 		cmds = append(cmds, m.mainScreen.Init(), m.fetchDataCmd())
+
+	case messages.LightUpdateMsg:
+		// Handle real-time light updates from WebSocket
+		debugf("Handling LightUpdateMsg: id=%s on=%v brightness=%v colorTemp=%v",
+			msg.LightID, msg.On, msg.Brightness, msg.ColorTemp)
+
+		light := m.findLightByID(msg.LightID)
+		if light == nil {
+			debugf("  Light not found: %s", msg.LightID)
+			cmds = append(cmds, m.listenForEvents())
+			return m, tea.Batch(cmds...)
+		}
+		debugf("  Found light: %s (%s)", light.Name, light.ID)
+
+		updated := false
+
+		if msg.On != nil {
+			if !m.pending.MatchesAndClear(msg.LightID, "on", *msg.On) {
+				debugf("  Applying on=%v (no pending match)", *msg.On)
+				light.On = *msg.On
+				updated = true
+			} else {
+				debugf("  Ignoring on=%v (matched pending op)", *msg.On)
+			}
+		}
+
+		if msg.Brightness != nil {
+			if !m.pending.MatchesAndClear(msg.LightID, "brightness", *msg.Brightness) {
+				debugf("  Applying brightness=%v (no pending match)", *msg.Brightness)
+				light.SetBrightnessPct(*msg.Brightness)
+				updated = true
+			} else {
+				debugf("  Ignoring brightness=%v (matched pending op)", *msg.Brightness)
+			}
+		}
+
+		if msg.ColorTemp != nil {
+			if !m.pending.MatchesAndClear(msg.LightID, "color_temp", *msg.ColorTemp) {
+				debugf("  Applying colorTemp=%v (no pending match)", *msg.ColorTemp)
+				if light.Color == nil {
+					light.Color = &models.Color{}
+				}
+				light.Color.Mirek = uint16(*msg.ColorTemp)
+				light.Color.Mode = models.ColorModeColorTemp
+				light.Color.InvalidateCache()
+				updated = true
+			} else {
+				debugf("  Ignoring colorTemp=%v (matched pending op)", *msg.ColorTemp)
+			}
+		}
+
+		if msg.ColorXY != nil {
+			xy := struct{ X, Y float64 }{msg.ColorXY.X, msg.ColorXY.Y}
+			if !m.pending.MatchesAndClear(msg.LightID, "color_xy", xy) {
+				debugf("  Applying colorXY={%v,%v} (no pending match)", msg.ColorXY.X, msg.ColorXY.Y)
+				if light.Color == nil {
+					light.Color = &models.Color{}
+				}
+				light.Color.X = msg.ColorXY.X
+				light.Color.Y = msg.ColorXY.Y
+				light.Color.Mode = models.ColorModeXY
+				light.Color.InvalidateCache()
+				updated = true
+			} else {
+				debugf("  Ignoring colorXY (matched pending op)")
+			}
+		}
+
+		debugf("  Updated=%v", updated)
+
+		if updated {
+			// Update room state (AllOn/AnyOn)
+			for _, room := range m.rooms {
+				for _, l := range room.Lights {
+					if l.ID == msg.LightID {
+						room.UpdateState()
+						break
+					}
+				}
+			}
+		}
+
+		cmds = append(cmds, m.listenForEvents())
 	}
 
 	// Route to current screen
@@ -184,7 +332,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ScreenMain:
 		var cmd tea.Cmd
-		m.mainScreen, cmd = m.mainScreen.Update(msg, m.bridge)
+		m.mainScreen, cmd = m.mainScreen.Update(msg, m.bridge, func(lightID, field string, value interface{}, dir screens.Direction) {
+			m.pending.AddWithDirection(lightID, field, value, Direction(dir))
+		})
 		cmds = append(cmds, cmd)
 
 	case ScreenScenes:
@@ -240,4 +390,23 @@ func (m Model) activateSceneCmd(sceneID string) tea.Cmd {
 
 		return messages.RefreshMsg{}
 	}
+}
+
+// listenForEvents creates a command that waits for the next event from the channel
+func (m Model) listenForEvents() tea.Cmd {
+	return func() tea.Msg {
+		return <-m.eventChan
+	}
+}
+
+// findLightByID finds a light by its ID across all rooms
+func (m Model) findLightByID(lightID string) *models.Light {
+	for _, room := range m.rooms {
+		for _, light := range room.Lights {
+			if light.ID == lightID {
+				return light
+			}
+		}
+	}
+	return nil
 }

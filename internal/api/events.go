@@ -1,16 +1,38 @@
 package api
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
-
-	"github.com/gorilla/websocket"
 )
+
+var eventsDebug = os.Getenv("HUE_DEBUG") != ""
+var eventsLog *log.Logger
+
+func init() {
+	if eventsDebug {
+		f, err := os.OpenFile("hue-debug.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			eventsLog = log.New(os.Stderr, "[EVENTS] ", log.LstdFlags|log.Lmicroseconds)
+		} else {
+			eventsLog = log.New(f, "[EVENTS] ", log.LstdFlags|log.Lmicroseconds)
+		}
+	}
+}
+
+func eventsDebugf(format string, args ...interface{}) {
+	if eventsDebug && eventsLog != nil {
+		eventsLog.Printf(format, args...)
+	}
+}
 
 // EventType represents the type of event from the bridge
 type EventType string
@@ -32,8 +54,8 @@ type Event struct {
 
 // LightUpdateEvent contains updated light state
 type LightUpdateEvent struct {
-	ID   string
-	On   *bool
+	ID         string
+	On         *bool
 	Brightness *float64
 	ColorTemp  *int
 	ColorXY    *struct {
@@ -44,11 +66,11 @@ type LightUpdateEvent struct {
 // EventHandler is called when an event is received
 type EventHandler func(events []Event)
 
-// EventSubscription manages a WebSocket connection to the bridge for events
+// EventSubscription manages an SSE connection to the bridge for events
 type EventSubscription struct {
 	bridge  *HueBridge
 	handler EventHandler
-	conn    *websocket.Conn
+	resp    *http.Response
 	mu      sync.Mutex
 	done    chan struct{}
 	running bool
@@ -96,8 +118,8 @@ func (s *EventSubscription) Stop() error {
 	s.running = false
 	close(s.done)
 
-	if s.conn != nil {
-		return s.conn.Close()
+	if s.resp != nil {
+		return s.resp.Body.Close()
 	}
 	return nil
 }
@@ -115,6 +137,7 @@ func (s *EventSubscription) run(ctx context.Context) {
 
 		err := s.connect(ctx)
 		if err != nil {
+			eventsDebugf("Connection error: %v, reconnecting in 5s", err)
 			// Wait before reconnecting
 			select {
 			case <-time.After(5 * time.Second):
@@ -130,76 +153,120 @@ func (s *EventSubscription) run(ctx context.Context) {
 
 		// Connection lost, close and reconnect
 		s.mu.Lock()
-		if s.conn != nil {
-			// Error ignored: we're about to reconnect
-			_ = s.conn.Close()
-			s.conn = nil
+		if s.resp != nil {
+			s.resp.Body.Close()
+			s.resp = nil
 		}
 		s.mu.Unlock()
+
+		eventsDebugf("Connection lost, reconnecting...")
 	}
 }
 
-// connect establishes the WebSocket connection
+// connect establishes the SSE connection
 func (s *EventSubscription) connect(ctx context.Context) error {
-	dialer := websocket.Dialer{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		HandshakeTimeout: 10 * time.Second,
+	url := fmt.Sprintf("https://%s/eventstream/clip/v2", s.bridge.host)
+	eventsDebugf("Connecting to SSE: %s", url)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	url := fmt.Sprintf("wss://%s/eventstream/clip/v2", s.bridge.host)
+	req.Header.Set("hue-application-key", s.bridge.appKey)
+	req.Header.Set("Accept", "text/event-stream")
 
-	header := http.Header{}
-	header.Set("hue-application-key", s.bridge.appKey)
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+		Timeout: 0, // No timeout for SSE
+	}
 
-	conn, _, err := dialer.DialContext(ctx, url, header)
+	resp, err := client.Do(req)
 	if err != nil {
+		eventsDebugf("SSE connection failed: %v", err)
 		return fmt.Errorf("failed to connect to event stream: %w", err)
 	}
 
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		eventsDebugf("SSE bad status: %s", resp.Status)
+		return fmt.Errorf("unexpected status: %s", resp.Status)
+	}
+
+	eventsDebugf("SSE connected successfully (status: %s, content-type: %s)",
+		resp.Status, resp.Header.Get("Content-Type"))
+
 	s.mu.Lock()
-	s.conn = conn
+	s.resp = resp
 	s.mu.Unlock()
 
 	return nil
 }
 
-// readLoop reads events from the WebSocket
+// readLoop reads events from the SSE stream
 func (s *EventSubscription) readLoop(ctx context.Context) {
-	for {
+	eventsDebugf("Starting SSE read loop")
+
+	s.mu.Lock()
+	resp := s.resp
+	s.mu.Unlock()
+
+	if resp == nil {
+		eventsDebugf("Read loop: response is nil")
+		return
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	// Increase buffer size for large events
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 1024*1024)
+
+	var dataBuffer strings.Builder
+
+	for scanner.Scan() {
 		select {
 		case <-ctx.Done():
+			eventsDebugf("Read loop: context done")
 			return
 		case <-s.done:
+			eventsDebugf("Read loop: done signal received")
 			return
 		default:
 		}
 
-		s.mu.Lock()
-		conn := s.conn
-		s.mu.Unlock()
+		line := scanner.Text()
 
-		if conn == nil {
-			return
-		}
+		// SSE format: lines starting with "data:" contain JSON
+		// Empty line signals end of event
+		if strings.HasPrefix(line, "data:") {
+			data := strings.TrimPrefix(line, "data:")
+			data = strings.TrimSpace(data)
+			dataBuffer.WriteString(data)
+		} else if line == "" && dataBuffer.Len() > 0 {
+			// End of event, process the data
+			eventData := dataBuffer.String()
+			dataBuffer.Reset()
 
-		// Set read deadline
-		if err := conn.SetReadDeadline(time.Now().Add(60 * time.Second)); err != nil {
-			return
+			eventsDebugf("Read loop: received event (%d bytes)", len(eventData))
+			events := s.parseMessage([]byte(eventData))
+			eventsDebugf("Read loop: parsed %d events", len(events))
+			if len(events) > 0 {
+				s.batchEvents(events)
+			}
 		}
+		// Ignore other lines (id:, event:, retry:, comments starting with :)
+	}
 
-		_, message, err := conn.ReadMessage()
-		if err != nil {
-			return
-		}
-
-		events := s.parseMessage(message)
-		if len(events) > 0 {
-			s.batchEvents(events)
-		}
+	if err := scanner.Err(); err != nil {
+		eventsDebugf("Read loop: scanner error: %v", err)
+	} else {
+		eventsDebugf("Read loop: stream ended")
 	}
 }
 
-// parseMessage parses a WebSocket message into events
+// parseMessage parses an SSE data payload into events
 func (s *EventSubscription) parseMessage(message []byte) []Event {
 	var rawEvents []struct {
 		CreationTime string `json:"creationtime"`
@@ -231,6 +298,7 @@ func (s *EventSubscription) parseMessage(message []byte) []Event {
 	}
 
 	if err := json.Unmarshal(message, &rawEvents); err != nil {
+		eventsDebugf("Parse error: %v (data: %s)", err, string(message[:min(200, len(message))]))
 		return nil
 	}
 
@@ -260,6 +328,7 @@ func (s *EventSubscription) batchEvents(events []Event) {
 	s.batchMu.Lock()
 	defer s.batchMu.Unlock()
 
+	eventsDebugf("Batching %d events (batch size now: %d)", len(events), len(s.eventBatch)+len(events))
 	s.eventBatch = append(s.eventBatch, events...)
 
 	// Cancel existing timer and create new one
@@ -279,6 +348,7 @@ func (s *EventSubscription) deliverBatch() {
 	s.eventBatch = nil
 	s.batchMu.Unlock()
 
+	eventsDebugf("Delivering batch of %d events", len(batch))
 	if len(batch) > 0 && s.handler != nil {
 		s.handler(batch)
 	}
@@ -291,8 +361,8 @@ func ParseLightUpdate(event Event) (*LightUpdateEvent, error) {
 	}
 
 	var data struct {
-		ID      string `json:"id"`
-		On      *struct {
+		ID string `json:"id"`
+		On *struct {
 			On bool `json:"on"`
 		} `json:"on"`
 		Dimming *struct {

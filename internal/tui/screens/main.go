@@ -17,6 +17,18 @@ import (
 	"github.com/angristan/hue-tui/internal/tui/messages"
 )
 
+// Direction represents the direction of a change
+type Direction int
+
+const (
+	DirExact Direction = iota // Exact match required (for booleans)
+	DirUp                     // Value is increasing
+	DirDown                   // Value is decreasing
+)
+
+// PendingAdder is a function that registers a pending operation with direction
+type PendingAdder func(lightID, field string, value interface{}, dir Direction)
+
 // Colors
 var (
 	colorPrimary = lipgloss.Color("#B794F4")
@@ -253,7 +265,7 @@ func (m *MainModel) IsRoomSelected() bool {
 	return false
 }
 
-func (m MainModel) Update(msg tea.Msg, bridge *api.HueBridge) (MainModel, tea.Cmd) {
+func (m MainModel) Update(msg tea.Msg, bridge *api.HueBridge, addPending PendingAdder) (MainModel, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
@@ -334,6 +346,9 @@ func (m MainModel) Update(msg tea.Msg, bridge *api.HueBridge) (MainModel, tea.Cm
 						if light.On {
 							newBrightness := max(10, light.BrightnessPct()-10)
 							light.SetBrightnessPct(newBrightness)
+							if addPending != nil {
+								addPending(light.ID, "brightness", newBrightness, DirDown)
+							}
 							cmds = append(cmds, m.setBrightnessCmd(bridge, light.ID, newBrightness))
 						}
 					}
@@ -342,9 +357,15 @@ func (m MainModel) Update(msg tea.Msg, bridge *api.HueBridge) (MainModel, tea.Cm
 				newBrightness := max(0, light.BrightnessPct()-10)
 				if newBrightness == 0 {
 					light.On = false
+					if addPending != nil {
+						addPending(light.ID, "on", false, DirExact)
+					}
 					cmds = append(cmds, m.toggleLightCmd(bridge, light.ID, false))
 				} else {
 					light.SetBrightnessPct(newBrightness)
+					if addPending != nil {
+						addPending(light.ID, "brightness", newBrightness, DirDown)
+					}
 					cmds = append(cmds, m.setBrightnessCmd(bridge, light.ID, newBrightness))
 				}
 			}
@@ -357,6 +378,9 @@ func (m MainModel) Update(msg tea.Msg, bridge *api.HueBridge) (MainModel, tea.Cm
 						if light.On {
 							newBrightness := min(100, light.BrightnessPct()+10)
 							light.SetBrightnessPct(newBrightness)
+							if addPending != nil {
+								addPending(light.ID, "brightness", newBrightness, DirUp)
+							}
 							cmds = append(cmds, m.setBrightnessCmd(bridge, light.ID, newBrightness))
 						}
 					}
@@ -365,11 +389,18 @@ func (m MainModel) Update(msg tea.Msg, bridge *api.HueBridge) (MainModel, tea.Cm
 				if !light.On {
 					light.On = true
 					light.SetBrightnessPct(10)
+					if addPending != nil {
+						addPending(light.ID, "on", true, DirExact)
+						addPending(light.ID, "brightness", 10, DirUp)
+					}
 					cmds = append(cmds, m.toggleLightCmd(bridge, light.ID, true))
 					cmds = append(cmds, m.setBrightnessCmd(bridge, light.ID, 10))
 				} else {
 					newBrightness := min(100, light.BrightnessPct()+10)
 					light.SetBrightnessPct(newBrightness)
+					if addPending != nil {
+						addPending(light.ID, "brightness", newBrightness, DirUp)
+					}
 					cmds = append(cmds, m.setBrightnessCmd(bridge, light.ID, newBrightness))
 				}
 			}
@@ -381,12 +412,18 @@ func (m MainModel) Update(msg tea.Msg, bridge *api.HueBridge) (MainModel, tea.Cm
 					newState := !room.AnyOn
 					for _, l := range room.Lights {
 						l.On = newState
+						if addPending != nil {
+							addPending(l.ID, "on", newState, DirExact)
+						}
 					}
 					room.UpdateState()
 					cmds = append(cmds, m.setGroupOnCmd(bridge, room.GroupedLightID, newState))
 				}
 			} else if light := m.SelectedLight(); light != nil {
 				light.On = !light.On
+				if addPending != nil {
+					addPending(light.ID, "on", light.On, DirExact)
+				}
 				cmds = append(cmds, m.toggleLightCmd(bridge, light.ID, light.On))
 			}
 
@@ -394,10 +431,23 @@ func (m MainModel) Update(msg tea.Msg, bridge *api.HueBridge) (MainModel, tea.Cm
 			if light := m.SelectedLight(); light != nil {
 				brightness := brightnessFromKey(msg.String())
 				if brightness >= 0 {
+					oldBrightness := light.BrightnessPct()
 					light.SetBrightnessPct(brightness)
 					if !light.On {
 						light.On = true
+						if addPending != nil {
+							addPending(light.ID, "on", true, DirExact)
+						}
 						cmds = append(cmds, m.toggleLightCmd(bridge, light.ID, true))
+					}
+					if addPending != nil {
+						dir := DirExact
+						if brightness > oldBrightness {
+							dir = DirUp
+						} else if brightness < oldBrightness {
+							dir = DirDown
+						}
+						addPending(light.ID, "brightness", brightness, dir)
 					}
 					cmds = append(cmds, m.setBrightnessCmd(bridge, light.ID, brightness))
 				}
@@ -405,7 +455,7 @@ func (m MainModel) Update(msg tea.Msg, bridge *api.HueBridge) (MainModel, tea.Cm
 
 		case "w":
 			if light := m.SelectedLight(); light != nil && light.SupportsColorTemp && light.Color != nil {
-				// Switch to temperature mode and make warmer
+				// Switch to temperature mode and make warmer (higher mirek = warmer)
 				if light.Color.Mirek == 0 {
 					light.Color.Mirek = 326 // Default to middle (3000K)
 				}
@@ -413,12 +463,15 @@ func (m MainModel) Update(msg tea.Msg, bridge *api.HueBridge) (MainModel, tea.Cm
 				light.Color.Mirek = uint16(newMirek)
 				light.Color.Mode = models.ColorModeColorTemp
 				light.Color.InvalidateCache()
+				if addPending != nil {
+					addPending(light.ID, "color_temp", newMirek, DirUp)
+				}
 				cmds = append(cmds, m.setColorTempCmd(bridge, light.ID, newMirek))
 			}
 
 		case "c":
 			if light := m.SelectedLight(); light != nil && light.SupportsColorTemp && light.Color != nil {
-				// Switch to temperature mode and make cooler
+				// Switch to temperature mode and make cooler (lower mirek = cooler)
 				if light.Color.Mirek == 0 {
 					light.Color.Mirek = 326 // Default to middle (3000K)
 				}
@@ -426,6 +479,9 @@ func (m MainModel) Update(msg tea.Msg, bridge *api.HueBridge) (MainModel, tea.Cm
 				light.Color.Mirek = uint16(newMirek)
 				light.Color.Mode = models.ColorModeColorTemp
 				light.Color.InvalidateCache()
+				if addPending != nil {
+					addPending(light.ID, "color_temp", newMirek, DirDown)
+				}
 				cmds = append(cmds, m.setColorTempCmd(bridge, light.ID, newMirek))
 			}
 
@@ -505,6 +561,9 @@ func (m MainModel) Update(msg tea.Msg, bridge *api.HueBridge) (MainModel, tea.Cm
 			if room := m.SelectedRoom(); room != nil && room.GroupedLightID != "" {
 				for _, l := range room.Lights {
 					l.On = true
+					if addPending != nil {
+						addPending(l.ID, "on", true, DirExact)
+					}
 				}
 				room.UpdateState()
 				cmds = append(cmds, m.setGroupOnCmd(bridge, room.GroupedLightID, true))
@@ -514,6 +573,9 @@ func (m MainModel) Update(msg tea.Msg, bridge *api.HueBridge) (MainModel, tea.Cm
 			if room := m.SelectedRoom(); room != nil && room.GroupedLightID != "" {
 				for _, l := range room.Lights {
 					l.On = false
+					if addPending != nil {
+						addPending(l.ID, "on", false, DirExact)
+					}
 				}
 				room.UpdateState()
 				cmds = append(cmds, m.setGroupOnCmd(bridge, room.GroupedLightID, false))
