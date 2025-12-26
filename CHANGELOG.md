@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/angristan/hue-tui/compare/v1.0.0...v1.0.1) (2025-12-26)
+
+
+### Bug Fixes
+
+* **ci:** reorder semantic-release plugins to fix goreleaser build ([20cb77e](https://github.com/angristan/hue-tui/commit/20cb77ef4683cb590975545c0a178af4da793b0a))
+
 # 1.0.0 (2025-12-26)
 
 
