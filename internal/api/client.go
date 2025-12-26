@@ -77,12 +77,16 @@ type apiResponse struct {
 }
 
 // GetLights retrieves all lights from the bridge
-func (b *HueBridge) GetLights(ctx context.Context) ([]*models.Light, error) {
+func (b *HueBridge) GetLights(ctx context.Context) (lights []*models.Light, err error) {
 	resp, err := b.doRequest(ctx, "GET", "/clip/v2/resource/light", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get lights: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("failed to close response body: %w", cerr)
+		}
+	}()
 
 	var apiResp apiResponse
 	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
@@ -98,12 +102,12 @@ func (b *HueBridge) GetLights(ctx context.Context) ([]*models.Light, error) {
 		return nil, fmt.Errorf("failed to parse lights: %w", err)
 	}
 
-	lights := make([]*models.Light, len(rawLights))
+	result := make([]*models.Light, len(rawLights))
 	for i, raw := range rawLights {
-		lights[i] = raw.toModel()
+		result[i] = raw.toModel()
 	}
 
-	return lights, nil
+	return result, nil
 }
 
 // lightResource represents the V2 API light resource
@@ -179,12 +183,16 @@ func (r *lightResource) toModel() *models.Light {
 }
 
 // GetRooms retrieves all rooms from the bridge
-func (b *HueBridge) GetRooms(ctx context.Context) ([]*models.Room, error) {
+func (b *HueBridge) GetRooms(ctx context.Context) (rooms []*models.Room, err error) {
 	resp, err := b.doRequest(ctx, "GET", "/clip/v2/resource/room", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get rooms: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("failed to close response body: %w", cerr)
+		}
+	}()
 
 	var apiResp apiResponse
 	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
@@ -200,12 +208,12 @@ func (b *HueBridge) GetRooms(ctx context.Context) ([]*models.Room, error) {
 		return nil, fmt.Errorf("failed to parse rooms: %w", err)
 	}
 
-	rooms := make([]*models.Room, len(rawRooms))
+	result := make([]*models.Room, len(rawRooms))
 	for i, raw := range rawRooms {
-		rooms[i] = raw.toModel()
+		result[i] = raw.toModel()
 	}
 
-	return rooms, nil
+	return result, nil
 }
 
 // roomResource represents the V2 API room resource
@@ -250,12 +258,16 @@ func (r *roomResource) toModel() *models.Room {
 }
 
 // GetScenes retrieves all scenes from the bridge
-func (b *HueBridge) GetScenes(ctx context.Context) ([]*models.Scene, error) {
+func (b *HueBridge) GetScenes(ctx context.Context) (scenes []*models.Scene, err error) {
 	resp, err := b.doRequest(ctx, "GET", "/clip/v2/resource/scene", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get scenes: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("failed to close response body: %w", cerr)
+		}
+	}()
 
 	var apiResp apiResponse
 	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
@@ -271,12 +283,12 @@ func (b *HueBridge) GetScenes(ctx context.Context) ([]*models.Scene, error) {
 		return nil, fmt.Errorf("failed to parse scenes: %w", err)
 	}
 
-	scenes := make([]*models.Scene, len(rawScenes))
+	result := make([]*models.Scene, len(rawScenes))
 	for i, raw := range rawScenes {
-		scenes[i] = raw.toModel()
+		result[i] = raw.toModel()
 	}
 
-	return scenes, nil
+	return result, nil
 }
 
 // sceneResource represents the V2 API scene resource
@@ -303,12 +315,16 @@ func (r *sceneResource) toModel() *models.Scene {
 }
 
 // GetDevices retrieves all devices and caches their names
-func (b *HueBridge) GetDevices(ctx context.Context) error {
+func (b *HueBridge) GetDevices(ctx context.Context) (err error) {
 	resp, err := b.doRequest(ctx, "GET", "/clip/v2/resource/device", nil)
 	if err != nil {
 		return fmt.Errorf("failed to get devices: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("failed to close response body: %w", cerr)
+		}
+	}()
 
 	var apiResp apiResponse
 	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
@@ -446,13 +462,17 @@ func pow(base, exp float64) float64 {
 }
 
 // setLightState sends a PUT request to update light state
-func (b *HueBridge) setLightState(ctx context.Context, lightID, body string) error {
+func (b *HueBridge) setLightState(ctx context.Context, lightID, bodyStr string) (err error) {
 	path := fmt.Sprintf("/clip/v2/resource/light/%s", lightID)
-	resp, err := b.doRequest(ctx, "PUT", path, strings.NewReader(body))
+	resp, err := b.doRequest(ctx, "PUT", path, strings.NewReader(bodyStr))
 	if err != nil {
 		return fmt.Errorf("failed to set light state: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("failed to close response body: %w", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
@@ -463,14 +483,18 @@ func (b *HueBridge) setLightState(ctx context.Context, lightID, body string) err
 }
 
 // SetGroupedLightOn turns all lights in a group on or off
-func (b *HueBridge) SetGroupedLightOn(ctx context.Context, groupedLightID string, on bool) error {
+func (b *HueBridge) SetGroupedLightOn(ctx context.Context, groupedLightID string, on bool) (err error) {
 	body := fmt.Sprintf(`{"on":{"on":%t}}`, on)
 	path := fmt.Sprintf("/clip/v2/resource/grouped_light/%s", groupedLightID)
 	resp, err := b.doRequest(ctx, "PUT", path, strings.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("failed to set grouped light state: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("failed to close response body: %w", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
@@ -481,14 +505,18 @@ func (b *HueBridge) SetGroupedLightOn(ctx context.Context, groupedLightID string
 }
 
 // ActivateScene activates a scene
-func (b *HueBridge) ActivateScene(ctx context.Context, sceneID string) error {
+func (b *HueBridge) ActivateScene(ctx context.Context, sceneID string) (err error) {
 	body := `{"recall":{"action":"active"}}`
 	path := fmt.Sprintf("/clip/v2/resource/scene/%s", sceneID)
 	resp, err := b.doRequest(ctx, "PUT", path, strings.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("failed to activate scene: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("failed to close response body: %w", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
@@ -565,34 +593,38 @@ func (b *HueBridge) FetchAll(ctx context.Context) ([]*models.Room, []*models.Sce
 	// Fetch devices to map light ID -> device ID
 	resp, err := b.doRequest(ctx, "GET", "/clip/v2/resource/device", nil)
 	if err == nil {
-		defer resp.Body.Close()
+		func() {
+			defer func() {
+				_ = resp.Body.Close() // Error ignored: optional device fetch
+			}()
 
-		var apiResp apiResponse
-		if json.NewDecoder(resp.Body).Decode(&apiResp) == nil {
-			var devices []struct {
-				ID       string `json:"id"`
-				Services []struct {
-					Rid   string `json:"rid"`
-					Rtype string `json:"rtype"`
-				} `json:"services"`
-			}
-			if json.Unmarshal(apiResp.Data, &devices) == nil {
-				// Map light ID to device ID
-				for _, device := range devices {
-					for _, svc := range device.Services {
-						if svc.Rtype == "light" {
-							// Find the light and set its device ID
-							for _, light := range lights {
-								if light.ID == svc.Rid {
-									light.DeviceID = device.ID
-									break
+			var apiResp apiResponse
+			if json.NewDecoder(resp.Body).Decode(&apiResp) == nil {
+				var devices []struct {
+					ID       string `json:"id"`
+					Services []struct {
+						Rid   string `json:"rid"`
+						Rtype string `json:"rtype"`
+					} `json:"services"`
+				}
+				if json.Unmarshal(apiResp.Data, &devices) == nil {
+					// Map light ID to device ID
+					for _, device := range devices {
+						for _, svc := range device.Services {
+							if svc.Rtype == "light" {
+								// Find the light and set its device ID
+								for _, light := range lights {
+									if light.ID == svc.Rid {
+										light.DeviceID = device.ID
+										break
+									}
 								}
 							}
 						}
 					}
 				}
 			}
-		}
+		}()
 	}
 
 	// Assign lights to rooms using device IDs

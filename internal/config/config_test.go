@@ -12,12 +12,22 @@ func TestConfigLoadSave(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Errorf("Failed to remove temp dir: %v", err)
+		}
+	})
 
 	// Override config directory
 	originalXDG := os.Getenv("XDG_CONFIG_HOME")
-	os.Setenv("XDG_CONFIG_HOME", tmpDir)
-	defer os.Setenv("XDG_CONFIG_HOME", originalXDG)
+	if err := os.Setenv("XDG_CONFIG_HOME", tmpDir); err != nil {
+		t.Fatalf("Failed to set XDG_CONFIG_HOME: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Setenv("XDG_CONFIG_HOME", originalXDG); err != nil {
+			t.Errorf("Failed to restore XDG_CONFIG_HOME: %v", err)
+		}
+	})
 
 	// Create a config
 	cfg := &Config{
@@ -209,12 +219,22 @@ func TestLoadNonExistent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Errorf("Failed to remove temp dir: %v", err)
+		}
+	})
 
 	// Override config directory
 	originalXDG := os.Getenv("XDG_CONFIG_HOME")
-	os.Setenv("XDG_CONFIG_HOME", tmpDir)
-	defer os.Setenv("XDG_CONFIG_HOME", originalXDG)
+	if err := os.Setenv("XDG_CONFIG_HOME", tmpDir); err != nil {
+		t.Fatalf("Failed to set XDG_CONFIG_HOME: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Setenv("XDG_CONFIG_HOME", originalXDG); err != nil {
+			t.Errorf("Failed to restore XDG_CONFIG_HOME: %v", err)
+		}
+	})
 
 	// Load from non-existent file should return empty config
 	cfg, err := Load()

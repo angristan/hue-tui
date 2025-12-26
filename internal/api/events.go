@@ -85,20 +85,21 @@ func (s *EventSubscription) Start(ctx context.Context) error {
 }
 
 // Stop stops the event subscription
-func (s *EventSubscription) Stop() {
+func (s *EventSubscription) Stop() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if !s.running {
-		return
+		return nil
 	}
 
 	s.running = false
 	close(s.done)
 
 	if s.conn != nil {
-		s.conn.Close()
+		return s.conn.Close()
 	}
+	return nil
 }
 
 // run is the main event loop
@@ -127,10 +128,11 @@ func (s *EventSubscription) run(ctx context.Context) {
 
 		s.readLoop(ctx)
 
-		// Connection lost, reconnect
+		// Connection lost, close and reconnect
 		s.mu.Lock()
 		if s.conn != nil {
-			s.conn.Close()
+			// Error ignored: we're about to reconnect
+			_ = s.conn.Close()
 			s.conn = nil
 		}
 		s.mu.Unlock()

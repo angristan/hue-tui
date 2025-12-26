@@ -86,7 +86,7 @@ type nupnpResponse struct {
 }
 
 // DiscoverCloud discovers Hue bridges using the Philips Hue cloud service (NUPNP)
-func DiscoverCloud(ctx context.Context, timeout time.Duration) ([]DiscoveredBridge, error) {
+func DiscoverCloud(ctx context.Context, timeout time.Duration) (bridges []DiscoveredBridge, err error) {
 	client := &http.Client{Timeout: timeout}
 
 	req, err := http.NewRequestWithContext(ctx, "GET", "https://discovery.meethue.com", nil)
@@ -98,7 +98,11 @@ func DiscoverCloud(ctx context.Context, timeout time.Duration) ([]DiscoveredBrid
 	if err != nil {
 		return nil, fmt.Errorf("cloud discovery request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("failed to close response body: %w", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("cloud discovery returned status %d", resp.StatusCode)
@@ -109,15 +113,15 @@ func DiscoverCloud(ctx context.Context, timeout time.Duration) ([]DiscoveredBrid
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	bridges := make([]DiscoveredBridge, len(results))
+	result := make([]DiscoveredBridge, len(results))
 	for i, r := range results {
-		bridges[i] = DiscoveredBridge{
+		result[i] = DiscoveredBridge{
 			Host:     r.InternalIPAddress,
 			BridgeID: r.ID,
 		}
 	}
 
-	return bridges, nil
+	return result, nil
 }
 
 // DiscoverAll runs both mDNS and cloud discovery concurrently

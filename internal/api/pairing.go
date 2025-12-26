@@ -83,10 +83,12 @@ func CreateAppKey(ctx context.Context, host string, appName string, timeout time
 
 		var responses []pairingResponse
 		if err := json.NewDecoder(resp.Body).Decode(&responses); err != nil {
-			resp.Body.Close()
+			_ = resp.Body.Close() // Error ignored: already returning decode error
 			return "", fmt.Errorf("failed to decode pairing response: %w", err)
 		}
-		resp.Body.Close()
+		if err := resp.Body.Close(); err != nil {
+			return "", fmt.Errorf("failed to close response body: %w", err)
+		}
 
 		if len(responses) == 0 {
 			time.Sleep(retryInterval)
@@ -115,7 +117,7 @@ func CreateAppKey(ctx context.Context, host string, appName string, timeout time
 }
 
 // GetBridgeID retrieves the bridge ID from the config endpoint
-func GetBridgeID(ctx context.Context, host string) (string, error) {
+func GetBridgeID(ctx context.Context, host string) (bridgeID string, err error) {
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 		Transport: &http.Transport{
@@ -134,7 +136,11 @@ func GetBridgeID(ctx context.Context, host string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to get bridge config: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("failed to close response body: %w", cerr)
+		}
+	}()
 
 	var config struct {
 		BridgeID string `json:"bridgeid"`
