@@ -128,7 +128,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			BridgeID: msg.Bridge.BridgeID(),
 		})
 		m.config.LastBridgeID = msg.Bridge.BridgeID()
-		m.config.Save()
+		if err := m.config.Save(); err != nil {
+			m.err = err
+		}
 
 		m.screen = ScreenMain
 		m.mainScreen.SetLoading(true)
@@ -145,7 +147,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.events = api.NewEventSubscription(m.bridge, func(events []api.Event) {
 				// Handle events - will be converted to tea.Msg in production
 			})
-			m.events.Start(m.ctx)
+			if err := m.events.Start(m.ctx); err != nil {
+				m.err = err
+			}
 		}
 
 	case messages.ErrorMsg:

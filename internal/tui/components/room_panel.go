@@ -55,12 +55,10 @@ func RenderRoomControl(room *models.Room, focused bool) string {
 	b.WriteString(nameStyle.Render(room.Name))
 
 	// Toggle button
-	toggleLabel := "All Off"
+	toggleLabel := "All On"
 	toggleStyle := styles.StyleButton
 	if room.AllOn {
 		toggleLabel = "All Off"
-	} else {
-		toggleLabel = "All On"
 	}
 	if focused {
 		toggleStyle = styles.StyleButtonFocused

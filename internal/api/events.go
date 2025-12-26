@@ -181,7 +181,9 @@ func (s *EventSubscription) readLoop(ctx context.Context) {
 		}
 
 		// Set read deadline
-		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		if err := conn.SetReadDeadline(time.Now().Add(60 * time.Second)); err != nil {
+			return
+		}
 
 		_, message, err := conn.ReadMessage()
 		if err != nil {

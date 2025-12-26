@@ -19,14 +19,11 @@ import (
 
 // Colors
 var (
-	colorPrimary   = lipgloss.Color("#B794F4")
-	colorSecondary = lipgloss.Color("#9F7AEA")
-	colorMuted     = lipgloss.Color("#6B6B80")
-	colorSuccess   = lipgloss.Color("#68D391")
-	colorWarning   = lipgloss.Color("#FBBF24")
-	colorDim       = lipgloss.Color("#4A4A5A")
-	colorBg        = lipgloss.Color("#1A1A2E")
-	colorSurface   = lipgloss.Color("#2D2D44")
+	colorPrimary = lipgloss.Color("#B794F4")
+	colorMuted   = lipgloss.Color("#6B6B80")
+	colorSuccess = lipgloss.Color("#68D391")
+	colorWarning = lipgloss.Color("#FBBF24")
+	colorDim     = lipgloss.Color("#4A4A5A")
 )
 
 // Styles
@@ -1371,7 +1368,9 @@ func (m MainModel) toggleLightCmd(bridge *api.HueBridge, lightID string, on bool
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		bridge.SetLightOn(ctx, lightID, on)
+		if err := bridge.SetLightOn(ctx, lightID, on); err != nil {
+			return messages.ErrorMsg{Err: err}
+		}
 		return nil
 	}
 }
@@ -1383,7 +1382,9 @@ func (m MainModel) setBrightnessCmd(bridge *api.HueBridge, lightID string, brigh
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		bridge.SetLightBrightness(ctx, lightID, brightness)
+		if err := bridge.SetLightBrightness(ctx, lightID, brightness); err != nil {
+			return messages.ErrorMsg{Err: err}
+		}
 		return nil
 	}
 }
@@ -1395,7 +1396,9 @@ func (m MainModel) setColorTempCmd(bridge *api.HueBridge, lightID string, mirek 
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		bridge.SetLightColorTemp(ctx, lightID, mirek)
+		if err := bridge.SetLightColorTemp(ctx, lightID, mirek); err != nil {
+			return messages.ErrorMsg{Err: err}
+		}
 		return nil
 	}
 }
@@ -1407,7 +1410,9 @@ func (m MainModel) setColorHSCmd(bridge *api.HueBridge, lightID string, hue uint
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		bridge.SetLightColorHS(ctx, lightID, hue, sat)
+		if err := bridge.SetLightColorHS(ctx, lightID, hue, sat); err != nil {
+			return messages.ErrorMsg{Err: err}
+		}
 		return nil
 	}
 }
@@ -1419,7 +1424,9 @@ func (m MainModel) setGroupOnCmd(bridge *api.HueBridge, groupID string, on bool)
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		bridge.SetGroupedLightOn(ctx, groupID, on)
+		if err := bridge.SetGroupedLightOn(ctx, groupID, on); err != nil {
+			return messages.ErrorMsg{Err: err}
+		}
 		return nil
 	}
 }
