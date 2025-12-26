@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/angristan/hue-tui/compare/v1.2.0...v1.3.0) (2025-12-26)
+
+
+### Features
+
+* **pending:** extend pending tracking to hue/saturation color changes ([ef06222](https://github.com/angristan/hue-tui/commit/ef0622260764f2eade80abddc3b6b3eb902ca031))
+
 # [1.2.0](https://github.com/angristan/hue-tui/compare/v1.1.0...v1.2.0) (2025-12-26)
 
 
