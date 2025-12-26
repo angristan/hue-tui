@@ -54,3 +54,4 @@ release:
   github:
     owner: angristan
     name: hue-tui
+  mode: keep-existing
