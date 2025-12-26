@@ -1,3 +1,16 @@
+# [1.2.0](https://github.com/angristan/hue-tui/compare/v1.1.0...v1.2.0) (2025-12-26)
+
+
+### Bug Fixes
+
+* **lint:** handle Body.Close() error returns ([54f6f98](https://github.com/angristan/hue-tui/commit/54f6f986d2d1673a6437d71e48b273f4a717fac8))
+
+
+### Features
+
+* **events:** add real-time light state updates via SSE ([261423a](https://github.com/angristan/hue-tui/commit/261423abec953e6bf6ada028375d9a728d1c6a5c))
+* **ui:** sort rooms and lights alphabetically ([a8be66e](https://github.com/angristan/hue-tui/commit/a8be66eed1780f1f9f1abc20df979ae784495020))
+
 # [1.1.0](https://github.com/angristan/hue-tui/compare/v1.0.2...v1.1.0) (2025-12-26)
 
 
