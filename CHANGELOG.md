@@ -1,3 +1,15 @@
+# [1.4.0](https://github.com/angristan/hue-tui/compare/v1.3.0...v1.4.0) (2025-12-27)
+
+
+### Bug Fixes
+
+* **lint:** use copy() instead of loop and format code ([edcf957](https://github.com/angristan/hue-tui/commit/edcf957a53606dd16668eb95a97c96b1d5589095))
+
+
+### Features
+
+* **demo:** add full demo mode for VHS recordings ([bb30c94](https://github.com/angristan/hue-tui/commit/bb30c94759254604de166b0b2af4d898e718ce68))
+
 # [1.3.0](https://github.com/angristan/hue-tui/compare/v1.2.0...v1.3.0) (2025-12-26)
 
 
