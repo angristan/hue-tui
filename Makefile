@@ -1,4 +1,4 @@
-.PHONY: build run test clean install lint
+.PHONY: build run test clean install lint vhs demo
 
 # Binary name
 BINARY=hue
@@ -99,3 +99,13 @@ help:
 	@echo "  fmt          - Format code"
 	@echo "  lint         - Run linter (requires golangci-lint)"
 	@echo "  dev          - Build with race detector"
+	@echo "  vhs          - Generate demo GIF with VHS"
+	@echo "  demo         - Run in demo mode"
+
+# Generate demo GIF (requires vhs: https://github.com/charmbracelet/vhs)
+vhs: build
+	vhs demo/demo.tape
+
+# Run in demo mode
+demo: build
+	./$(BINARY) --demo

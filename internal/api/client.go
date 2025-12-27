@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/angristan/hue-tui/internal/models"
 )
@@ -34,6 +35,7 @@ func NewHueBridge(host, appKey, bridgeID string) *HueBridge {
 		bridgeID:    bridgeID,
 		deviceNames: make(map[string]string),
 		client: &http.Client{
+			Timeout: 10 * time.Second,
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 			},

@@ -274,7 +274,7 @@ func (m *MainModel) IsRoomSelected() bool {
 	return false
 }
 
-func (m MainModel) Update(msg tea.Msg, bridge *api.HueBridge, addPending PendingAdder) (MainModel, tea.Cmd) {
+func (m MainModel) Update(msg tea.Msg, bridge api.BridgeClient, addPending PendingAdder) (MainModel, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
@@ -643,7 +643,12 @@ func (m MainModel) View() string {
 
 	// Header
 	header := styleHeader.Render(" HUE CLI ")
-	status := lipgloss.NewStyle().Foreground(colorSuccess).Render(" ● Connected")
+	var status string
+	if m.loading {
+		status = lipgloss.NewStyle().Foreground(colorWarning).Render(" ⟳ Loading...")
+	} else {
+		status = lipgloss.NewStyle().Foreground(colorSuccess).Render(" ● Connected")
+	}
 	headerLine := header + status
 	b.WriteString(headerLine)
 	b.WriteString("\n")
@@ -1452,7 +1457,7 @@ func (m MainModel) renderHelp() string {
 }
 
 // Commands
-func (m MainModel) toggleLightCmd(bridge *api.HueBridge, lightID string, on bool) tea.Cmd {
+func (m MainModel) toggleLightCmd(bridge api.BridgeClient, lightID string, on bool) tea.Cmd {
 	return func() tea.Msg {
 		if bridge == nil {
 			return nil
@@ -1466,7 +1471,7 @@ func (m MainModel) toggleLightCmd(bridge *api.HueBridge, lightID string, on bool
 	}
 }
 
-func (m MainModel) setBrightnessCmd(bridge *api.HueBridge, lightID string, brightness int) tea.Cmd {
+func (m MainModel) setBrightnessCmd(bridge api.BridgeClient, lightID string, brightness int) tea.Cmd {
 	return func() tea.Msg {
 		if bridge == nil {
 			return nil
@@ -1480,7 +1485,7 @@ func (m MainModel) setBrightnessCmd(bridge *api.HueBridge, lightID string, brigh
 	}
 }
 
-func (m MainModel) setColorTempCmd(bridge *api.HueBridge, lightID string, mirek int) tea.Cmd {
+func (m MainModel) setColorTempCmd(bridge api.BridgeClient, lightID string, mirek int) tea.Cmd {
 	return func() tea.Msg {
 		if bridge == nil {
 			return nil
@@ -1494,7 +1499,7 @@ func (m MainModel) setColorTempCmd(bridge *api.HueBridge, lightID string, mirek 
 	}
 }
 
-func (m MainModel) setColorHSCmd(bridge *api.HueBridge, lightID string, hue uint16, sat uint8) tea.Cmd {
+func (m MainModel) setColorHSCmd(bridge api.BridgeClient, lightID string, hue uint16, sat uint8) tea.Cmd {
 	return func() tea.Msg {
 		if bridge == nil {
 			return nil
@@ -1508,7 +1513,7 @@ func (m MainModel) setColorHSCmd(bridge *api.HueBridge, lightID string, hue uint
 	}
 }
 
-func (m MainModel) setGroupOnCmd(bridge *api.HueBridge, groupID string, on bool) tea.Cmd {
+func (m MainModel) setGroupOnCmd(bridge api.BridgeClient, groupID string, on bool) tea.Cmd {
 	return func() tea.Msg {
 		if bridge == nil {
 			return nil

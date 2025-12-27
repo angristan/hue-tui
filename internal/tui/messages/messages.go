@@ -7,7 +7,7 @@ import (
 
 // BridgeConnectedMsg indicates successful bridge connection
 type BridgeConnectedMsg struct {
-	Bridge *api.HueBridge
+	Bridge api.BridgeClient
 	AppKey string
 }
 

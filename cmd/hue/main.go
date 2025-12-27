@@ -10,6 +10,19 @@ import (
 )
 
 func main() {
+	// Check for demo mode
+	demoMode := os.Getenv("HUE_DEMO") != ""
+	for _, arg := range os.Args[1:] {
+		if arg == "--demo" || arg == "-demo" {
+			demoMode = true
+			break
+		}
+	}
+
+	if demoMode {
+		fmt.Fprintln(os.Stderr, "[hue] Demo mode enabled")
+	}
+
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
@@ -18,7 +31,7 @@ func main() {
 	}
 
 	// Create and run the application
-	model := tui.NewModel(cfg)
+	model := tui.NewModel(cfg, demoMode)
 	p := tea.NewProgram(
 		model,
 		tea.WithAltScreen(),

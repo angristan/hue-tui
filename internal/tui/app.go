@@ -49,8 +49,9 @@ type Model struct {
 	config *config.Config
 
 	// Bridge connection
-	bridge *api.HueBridge
-	events *api.EventSubscription
+	bridge   api.BridgeClient
+	events   *api.EventSubscription
+	demoMode bool
 
 	// Event handling
 	eventChan chan tea.Msg
@@ -81,7 +82,7 @@ type Model struct {
 }
 
 // NewModel creates a new application model
-func NewModel(cfg *config.Config) Model {
+func NewModel(cfg *config.Config, demoMode bool) Model {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	m := Model{
@@ -90,10 +91,15 @@ func NewModel(cfg *config.Config) Model {
 		cancel:    cancel,
 		eventChan: make(chan tea.Msg, 100),
 		pending:   NewPendingTracker(),
+		demoMode:  demoMode,
 	}
 
 	// Determine initial screen
-	if cfg.HasBridges() {
+	if demoMode {
+		// Demo mode: use demo bridge, go straight to main screen
+		m.screen = ScreenMain
+		m.bridge = api.NewDemoBridge()
+	} else if cfg.HasBridges() {
 		m.screen = ScreenMain
 		bridgeCfg, _ := cfg.GetLastBridge()
 		if bridgeCfg != nil {
@@ -113,6 +119,7 @@ func NewModel(cfg *config.Config) Model {
 
 // Init initializes the application
 func (m Model) Init() tea.Cmd {
+	debugf("Init called, screen=%d, demoMode=%v, bridge=%v", m.screen, m.demoMode, m.bridge != nil)
 	cmds := []tea.Cmd{
 		tea.SetWindowTitle("Hue CLI"),
 	}
@@ -120,8 +127,10 @@ func (m Model) Init() tea.Cmd {
 	// Start with appropriate screen initialization
 	switch m.screen {
 	case ScreenSetup:
+		debugf("Init: starting setup screen")
 		cmds = append(cmds, m.setupScreen.Init())
 	case ScreenMain:
+		debugf("Init: starting main screen, will fetch data")
 		cmds = append(cmds, m.mainScreen.Init(), m.fetchDataCmd())
 	}
 
@@ -131,6 +140,9 @@ func (m Model) Init() tea.Cmd {
 // Update handles messages
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
+
+	// Log all message types for debugging
+	debugf("Update received message: %T", msg)
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -151,14 +163,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case messages.BridgeConnectedMsg:
 		// Bridge connection successful
 		m.bridge = msg.Bridge
-		m.config.AddBridge(config.BridgeConfig{
-			Host:     msg.Bridge.Host(),
-			Username: msg.AppKey,
-			BridgeID: msg.Bridge.BridgeID(),
-		})
-		m.config.LastBridgeID = msg.Bridge.BridgeID()
-		if err := m.config.Save(); err != nil {
-			m.err = err
+		// Only save config for real bridges, not demo mode
+		if !m.demoMode {
+			m.config.AddBridge(config.BridgeConfig{
+				Host:     msg.Bridge.Host(),
+				Username: msg.AppKey,
+				BridgeID: msg.Bridge.BridgeID(),
+			})
+			m.config.LastBridgeID = msg.Bridge.BridgeID()
+			if err := m.config.Save(); err != nil {
+				m.err = err
+			}
 		}
 
 		m.screen = ScreenMain
@@ -166,15 +181,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.mainScreen.Init(), m.fetchDataCmd())
 
 	case messages.DataFetchedMsg:
+		debugf("DataFetchedMsg received: %d rooms, %d scenes", len(msg.Rooms), len(msg.Scenes))
 		m.rooms = msg.Rooms
 		m.scenes = msg.Scenes
 		m.mainScreen.SetData(m.rooms, m.scenes)
 		m.scenesScreen.SetScenes(m.scenes, m.rooms)
+		debugf("SetData called, mainScreen.loading should be false now")
 
-		// Start event subscription
-		if m.events == nil && m.bridge != nil {
+		// Start event subscription (skip in demo mode - state changes are immediate)
+		if m.events == nil && m.bridge != nil && !m.demoMode {
 			debugf("Starting event subscription")
-			m.events = api.NewEventSubscription(m.bridge, func(events []api.Event) {
+			// Cast to *HueBridge for event subscription (only real bridges support SSE)
+			if hueBridge, ok := m.bridge.(*api.HueBridge); ok {
+				m.events = api.NewEventSubscription(hueBridge, func(events []api.Event) {
 				debugf("Received %d events from WebSocket", len(events))
 				for _, event := range events {
 					debugf("  Event: type=%s resource=%s id=%s", event.Type, event.Resource, event.ResourceID)
@@ -207,18 +226,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 					}
 				}
-			})
-			if err := m.events.Start(m.ctx); err != nil {
-				debugf("Failed to start event subscription: %v", err)
-				m.err = err
-			} else {
-				debugf("Event subscription started successfully")
+				})
+				if err := m.events.Start(m.ctx); err != nil {
+					debugf("Failed to start event subscription: %v", err)
+					m.err = err
+				} else {
+					debugf("Event subscription started successfully")
+				}
+				cmds = append(cmds, m.listenForEvents())
 			}
-			cmds = append(cmds, m.listenForEvents())
 		}
 
 	case messages.ErrorMsg:
 		m.err = msg.Err
+		// Stop the loading spinner on error
+		m.mainScreen.SetLoading(false)
 
 	case messages.ShowScenesMsg:
 		m.screen = ScreenScenes
@@ -369,26 +391,41 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View renders the current screen
 func (m Model) View() string {
+	var view string
 	switch m.screen {
 	case ScreenSetup:
-		return m.setupScreen.View()
+		view = m.setupScreen.View()
 	case ScreenMain:
-		return m.mainScreen.View()
+		view = m.mainScreen.View()
 	case ScreenScenes:
-		return m.scenesScreen.View()
+		view = m.scenesScreen.View()
 	default:
-		return "Unknown screen"
+		view = "Unknown screen"
 	}
+
+	// Append error message if there's an error
+	if m.err != nil {
+		view += "\n\n  ⚠ Error: " + m.err.Error()
+	}
+
+	return view
 }
 
 // fetchDataCmd creates a command to fetch all data from the bridge
 func (m Model) fetchDataCmd() tea.Cmd {
+	debugf("fetchDataCmd called, bridge=%v, demoMode=%v", m.bridge != nil, m.demoMode)
+	// Capture bridge reference directly to avoid closure issues
+	bridge := m.bridge
+	ctx := m.ctx
 	return func() tea.Msg {
-		if m.bridge == nil {
+		debugf("fetchDataCmd executing, bridge=%v", bridge != nil)
+		if bridge == nil {
+			debugf("fetchDataCmd: bridge is nil!")
 			return messages.ErrorMsg{Err: config.ErrNoBridges}
 		}
 
-		rooms, scenes, err := m.bridge.FetchAll(m.ctx)
+		rooms, scenes, err := bridge.FetchAll(ctx)
+		debugf("fetchDataCmd: FetchAll returned %d rooms, %d scenes, err=%v", len(rooms), len(scenes), err)
 		if err != nil {
 			return messages.ErrorMsg{Err: err}
 		}

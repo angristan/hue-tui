@@ -1,101 +1,112 @@
 # VHS Demo for hue-tui
-# Run with: vhs demo.tape
+# Run with: vhs demo/demo.tape
 
-Output demo.gif
+Output demo/demo.gif
 
 Set FontSize 14
 Set Width 1200
 Set Height 700
 Set Theme "Catppuccin Mocha"
 Set Padding 20
+Set TypingSpeed 50ms
+Set Shell "bash"
 
 # Start the app
-Type "./hue"
+Type "./hue --demo"
 Enter
-Sleep 2s
+Sleep 2500ms
 
-# Navigate down through lights
-Sleep 500ms
-Type "j"
+# Navigate to a light
+Down
 Sleep 300ms
-Type "j"
+
+# Toggle light off/on
+Space
+Sleep 600ms
+Space
+Sleep 600ms
+
+# Brightness up/down
+Type "l"
+Sleep 150ms
+Type "l"
+Sleep 150ms
+Type "l"
+Sleep 400ms
+Type "h"
+Sleep 150ms
+Type "h"
+Sleep 600ms
+
+# Color temperature warm/cold
+Type "w"
 Sleep 300ms
-Type "j"
+Type "w"
+Sleep 400ms
+Type "c"
+Sleep 300ms
+Type "c"
+Sleep 600ms
+
+# Navigate to color light
+Down
+Sleep 300ms
+Down
+Sleep 400ms
+
+# Change hue color
+Type "e"
+Sleep 200ms
+Type "e"
+Sleep 200ms
+Type "e"
+Sleep 200ms
+Type "e"
+Sleep 600ms
+
+# Go to room header
+Up
+Sleep 200ms
+Up
+Sleep 200ms
+Up
+Sleep 400ms
+
+# Toggle room
+Space
+Sleep 600ms
+Space
+Sleep 600ms
+
+# Room brightness
+Type "l"
+Sleep 150ms
+Type "l"
+Sleep 150ms
+Type "l"
+Sleep 600ms
+
+# Open scenes and select one
+Type "s"
+Sleep 800ms
+Down
+Sleep 250ms
+Enter
+Sleep 1200ms
+
+# Search/filter
+Type "/"
+Sleep 300ms
+Type "floor"
+Sleep 600ms
+Enter
 Sleep 500ms
 
-# Toggle a light
-Type " "
-Sleep 1s
-
-# Adjust brightness with number keys
+# Adjust brightness on filtered result
 Type "5"
 Sleep 800ms
-Type "8"
-Sleep 800ms
 
-# Navigate with vim keys
-Type "k"
-Sleep 300ms
-Type "k"
-Sleep 500ms
-
-# Adjust brightness with h/l
-Type "l"
-Sleep 200ms
-Type "l"
-Sleep 200ms
-Type "l"
-Sleep 500ms
-
-Type "h"
-Sleep 200ms
-Type "h"
-Sleep 500ms
-
-# Color temperature
-Type "w"
-Sleep 500ms
-Type "w"
-Sleep 500ms
-Type "c"
-Sleep 500ms
-
-# Open scenes modal
-Type "s"
-Sleep 1s
-
-# Navigate scenes
-Type "j"
-Sleep 300ms
-Type "j"
-Sleep 300ms
-
-# Select a scene
-Enter
-Sleep 1s
-
-# Search for a light
-Type "/"
-Sleep 500ms
-Type "desk"
-Sleep 1s
+# Clear and quit
 Escape
-Sleep 500ms
-
-# Room controls - turn all on
-Type "a"
-Sleep 800ms
-
-# Turn all off
-Type "x"
-Sleep 800ms
-
-# Toggle side panel
-Tab
-Sleep 800ms
-Tab
-Sleep 500ms
-
-# Quit
+Sleep 400ms
 Type "q"
-Sleep 500ms
