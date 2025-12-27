@@ -1,3 +1,10 @@
+## [1.4.1](https://github.com/angristan/hue-tui/compare/v1.4.0...v1.4.1) (2025-12-27)
+
+
+### Bug Fixes
+
+* **demo:** correct navigation to show color changes in tape ([7eded60](https://github.com/angristan/hue-tui/commit/7eded607433b4539c1ac8daf73d4b8fb3261c7e1))
+
 # [1.4.0](https://github.com/angristan/hue-tui/compare/v1.3.0...v1.4.0) (2025-12-27)
 
 
