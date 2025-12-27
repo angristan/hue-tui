@@ -5,12 +5,12 @@ import (
 	"log"
 	"os"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/angristan/hue-tui/internal/api"
 	"github.com/angristan/hue-tui/internal/config"
 	"github.com/angristan/hue-tui/internal/models"
 	"github.com/angristan/hue-tui/internal/tui/messages"
 	"github.com/angristan/hue-tui/internal/tui/screens"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 var debugMode = os.Getenv("HUE_DEBUG") != ""
@@ -194,38 +194,38 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Cast to *HueBridge for event subscription (only real bridges support SSE)
 			if hueBridge, ok := m.bridge.(*api.HueBridge); ok {
 				m.events = api.NewEventSubscription(hueBridge, func(events []api.Event) {
-				debugf("Received %d events from WebSocket", len(events))
-				for _, event := range events {
-					debugf("  Event: type=%s resource=%s id=%s", event.Type, event.Resource, event.ResourceID)
-					if event.Resource == "light" && event.Type == api.EventTypeUpdate {
-						if update, err := api.ParseLightUpdate(event); err == nil {
-							msg := messages.LightUpdateMsg{
-								LightID: update.ID,
-								On:      update.On,
+					debugf("Received %d events from WebSocket", len(events))
+					for _, event := range events {
+						debugf("  Event: type=%s resource=%s id=%s", event.Type, event.Resource, event.ResourceID)
+						if event.Resource == "light" && event.Type == api.EventTypeUpdate {
+							if update, err := api.ParseLightUpdate(event); err == nil {
+								msg := messages.LightUpdateMsg{
+									LightID: update.ID,
+									On:      update.On,
+								}
+								if update.Brightness != nil {
+									b := int(*update.Brightness)
+									msg.Brightness = &b
+								}
+								if update.ColorTemp != nil {
+									msg.ColorTemp = update.ColorTemp
+								}
+								if update.ColorXY != nil {
+									msg.ColorXY = &struct{ X, Y float64 }{update.ColorXY.X, update.ColorXY.Y}
+								}
+								debugf("  Parsed light update: id=%s on=%v brightness=%v", update.ID, update.On, update.Brightness)
+								// Non-blocking send to avoid deadlock
+								select {
+								case m.eventChan <- msg:
+									debugf("  Sent to event channel")
+								default:
+									debugf("  Channel full, dropped event")
+								}
+							} else {
+								debugf("  Failed to parse light update: %v", err)
 							}
-							if update.Brightness != nil {
-								b := int(*update.Brightness)
-								msg.Brightness = &b
-							}
-							if update.ColorTemp != nil {
-								msg.ColorTemp = update.ColorTemp
-							}
-							if update.ColorXY != nil {
-								msg.ColorXY = &struct{ X, Y float64 }{update.ColorXY.X, update.ColorXY.Y}
-							}
-							debugf("  Parsed light update: id=%s on=%v brightness=%v", update.ID, update.On, update.Brightness)
-							// Non-blocking send to avoid deadlock
-							select {
-							case m.eventChan <- msg:
-								debugf("  Sent to event channel")
-							default:
-								debugf("  Channel full, dropped event")
-							}
-						} else {
-							debugf("  Failed to parse light update: %v", err)
 						}
 					}
-				}
 				})
 				if err := m.events.Start(m.ctx); err != nil {
 					debugf("Failed to start event subscription: %v", err)

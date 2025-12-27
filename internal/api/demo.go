@@ -50,14 +50,10 @@ func (d *DemoBridge) FetchAll(ctx context.Context) ([]*models.Room, []*models.Sc
 
 	// Return copies to avoid external modification
 	rooms := make([]*models.Room, len(d.rooms))
-	for i, room := range d.rooms {
-		rooms[i] = room
-	}
+	copy(rooms, d.rooms)
 
 	scenes := make([]*models.Scene, len(d.scenes))
-	for i, scene := range d.scenes {
-		scenes[i] = scene
-	}
+	copy(scenes, d.scenes)
 
 	return rooms, scenes, nil
 }
@@ -212,26 +208,26 @@ type lightState struct {
 var demoScenePresets = map[string]map[string]lightState{
 	// Living Room scenes
 	"scene-movie-night": {
-		"light-lr-ceiling":  {On: false, Brightness: 0},
-		"light-lr-floor":    {On: true, Brightness: 64, Mirek: 500},   // Dim warm
-		"light-lr-tv-bias":  {On: true, Brightness: 76, X: 0.15, Y: 0.06}, // Blue
-		"light-lr-accent":   {On: true, Brightness: 38, X: 0.55, Y: 0.41}, // Purple
+		"light-lr-ceiling": {On: false, Brightness: 0},
+		"light-lr-floor":   {On: true, Brightness: 64, Mirek: 500},       // Dim warm
+		"light-lr-tv-bias": {On: true, Brightness: 76, X: 0.15, Y: 0.06}, // Blue
+		"light-lr-accent":  {On: true, Brightness: 38, X: 0.55, Y: 0.41}, // Purple
 	},
 	"scene-energize": {
-		"light-lr-ceiling":  {On: true, Brightness: 254, Mirek: 200},  // Cool bright
-		"light-lr-floor":    {On: true, Brightness: 254, Mirek: 200},
-		"light-lr-tv-bias":  {On: true, Brightness: 254, X: 0.31, Y: 0.32}, // White
-		"light-lr-accent":   {On: true, Brightness: 254, X: 0.31, Y: 0.32},
+		"light-lr-ceiling": {On: true, Brightness: 254, Mirek: 200}, // Cool bright
+		"light-lr-floor":   {On: true, Brightness: 254, Mirek: 200},
+		"light-lr-tv-bias": {On: true, Brightness: 254, X: 0.31, Y: 0.32}, // White
+		"light-lr-accent":  {On: true, Brightness: 254, X: 0.31, Y: 0.32},
 	},
 	"scene-relax": {
-		"light-lr-ceiling":  {On: true, Brightness: 150, Mirek: 400},  // Warm
-		"light-lr-floor":    {On: true, Brightness: 127, Mirek: 450},
-		"light-lr-tv-bias":  {On: false, Brightness: 0},
-		"light-lr-accent":   {On: true, Brightness: 76, X: 0.56, Y: 0.35}, // Soft orange
+		"light-lr-ceiling": {On: true, Brightness: 150, Mirek: 400}, // Warm
+		"light-lr-floor":   {On: true, Brightness: 127, Mirek: 450},
+		"light-lr-tv-bias": {On: false, Brightness: 0},
+		"light-lr-accent":  {On: true, Brightness: 76, X: 0.56, Y: 0.35}, // Soft orange
 	},
 	// Bedroom scenes
 	"scene-sleep": {
-		"light-br-left":    {On: true, Brightness: 25, Mirek: 500},   // Very dim warm
+		"light-br-left":    {On: true, Brightness: 25, Mirek: 500}, // Very dim warm
 		"light-br-right":   {On: false, Brightness: 0},
 		"light-br-ceiling": {On: false, Brightness: 0},
 	},
@@ -242,17 +238,17 @@ var demoScenePresets = map[string]map[string]lightState{
 	},
 	// Kitchen scenes
 	"scene-cooking": {
-		"light-kt-main":    {On: true, Brightness: 254, Mirek: 250},  // Cool bright
+		"light-kt-main":    {On: true, Brightness: 254, Mirek: 250}, // Cool bright
 		"light-kt-cabinet": {On: true, Brightness: 254, Mirek: 250},
 	},
 	"scene-morning": {
-		"light-kt-main":    {On: true, Brightness: 180, Mirek: 350},  // Warm bright
+		"light-kt-main":    {On: true, Brightness: 180, Mirek: 350}, // Warm bright
 		"light-kt-cabinet": {On: true, Brightness: 127, Mirek: 400},
 	},
 	// Office scenes
 	"scene-focus": {
-		"light-of-desk":     {On: true, Brightness: 254, Mirek: 250},  // Cool bright
-		"light-of-monitor":  {On: true, Brightness: 150, Mirek: 200},
+		"light-of-desk":      {On: true, Brightness: 254, Mirek: 250}, // Cool bright
+		"light-of-monitor":   {On: true, Brightness: 150, Mirek: 200},
 		"light-of-bookshelf": {On: false, Brightness: 0},
 	},
 }

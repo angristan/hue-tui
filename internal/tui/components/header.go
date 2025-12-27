@@ -3,8 +3,8 @@ package components
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/angristan/hue-tui/internal/tui/styles"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // RenderHeader renders the application header

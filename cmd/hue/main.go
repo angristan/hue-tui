@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/angristan/hue-tui/internal/config"
 	"github.com/angristan/hue-tui/internal/tui"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func main() {

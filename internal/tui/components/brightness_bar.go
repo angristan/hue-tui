@@ -1,8 +1,8 @@
 package components
 
 import (
-	"github.com/charmbracelet/lipgloss"
 	"github.com/angristan/hue-tui/internal/tui/styles"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // BrightnessBarStyle defines the style options for brightness bars

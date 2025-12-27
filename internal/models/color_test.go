@@ -85,9 +85,9 @@ func TestHSVToRGB(t *testing.T) {
 
 func TestMirekToRGB(t *testing.T) {
 	tests := []struct {
-		name      string
-		mirek     uint16
-		wantWarm  bool // true if result should be warm (more red), false if cool (more blue)
+		name     string
+		mirek    uint16
+		wantWarm bool // true if result should be warm (more red), false if cool (more blue)
 	}{
 		{
 			name:     "warm white (2000K)",

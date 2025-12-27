@@ -3,9 +3,9 @@ package components
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/angristan/hue-tui/internal/models"
 	"github.com/angristan/hue-tui/internal/tui/styles"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // RenderRoomPanel renders a complete room panel with all its lights

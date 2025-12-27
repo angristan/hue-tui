@@ -97,8 +97,8 @@ type MainModel struct {
 	rooms         []*models.Room
 	scenes        []*models.Scene
 	selectedIndex int
-	scrollOffset  int              // Vertical scroll offset
-	items         []listItem       // Unified list of rooms and lights
+	scrollOffset  int        // Vertical scroll offset
+	items         []listItem // Unified list of rooms and lights
 	lightToRoom   map[string]*models.Room
 
 	showPanel   bool

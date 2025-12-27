@@ -4,11 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/angristan/hue-tui/internal/models"
 	"github.com/angristan/hue-tui/internal/tui/styles"
+	"github.com/charmbracelet/lipgloss"
 )
-
 
 // RenderLightCard renders a single light card
 func RenderLightCard(light *models.Light, selected bool, maxWidth int) string {

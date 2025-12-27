@@ -6,13 +6,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/angristan/hue-tui/internal/api"
+	"github.com/angristan/hue-tui/internal/tui/messages"
+	"github.com/angristan/hue-tui/internal/tui/styles"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/angristan/hue-tui/internal/api"
-	"github.com/angristan/hue-tui/internal/tui/messages"
-	"github.com/angristan/hue-tui/internal/tui/styles"
 )
 
 // SetupState represents the current setup state

@@ -3,11 +3,11 @@ package screens
 import (
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/angristan/hue-tui/internal/models"
 	"github.com/angristan/hue-tui/internal/tui/messages"
 	"github.com/angristan/hue-tui/internal/tui/styles"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // ScenesModel is the scenes modal model
