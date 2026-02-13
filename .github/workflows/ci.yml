@@ -85,6 +85,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [commitlint, test, lint, build]
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    outputs:
+      new_release_version: ${{ steps.check.outputs.version }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -108,6 +110,10 @@ jobs:
           version: latest
           install-only: true
 
+      - name: Get latest tag before release
+        id: before
+        run: echo "tag=$(git describe --tags --abbrev=0 2>/dev/null || echo '')" >> "$GITHUB_OUTPUT"
+
       - name: Install semantic-release
         run: npm install -D semantic-release @semantic-release/changelog @semantic-release/git @semantic-release/exec
 
@@ -115,3 +121,27 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx semantic-release
+
+      - name: Check if a new release was created
+        id: check
+        run: |
+          git fetch --tags
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo '')
+          if [ "$LATEST_TAG" != "${{ steps.before.outputs.tag }}" ] && [ -n "$LATEST_TAG" ]; then
+            echo "version=${LATEST_TAG#v}" >> "$GITHUB_OUTPUT"
+          fi
+
+  update-homebrew:
+    name: Update Homebrew formula
+    needs: [release]
+    if: needs.release.outputs.new_release_version != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify homebrew-tap
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          gh api repos/angristan/homebrew-tap/dispatches \
+            -f event_type=update-formula \
+            -f "client_payload[formula]=hue-tui" \
+            -f "client_payload[version]=${{ needs.release.outputs.new_release_version }}"

@@ -21,6 +21,13 @@ A terminal-based Philips Hue control application written in Go.
 
 ## Installation
 
+### Homebrew
+
+```bash
+brew tap angristan/tap
+brew install hue-tui
+```
+
 ### From releases
 
 Download the latest release from the [releases page](https://github.com/angristan/hue-tui/releases).
